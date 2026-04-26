@@ -1,0 +1,556 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* ── Learning Mode Styles ── */
+  .learn-header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .learn-header h2 {
+    font-size: clamp(1.6rem, 2.5vw + 1rem, 2.6rem);
+    margin: 0 0 8px;
+    background: linear-gradient(135deg, #57e6ff, #8f7bff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .learn-header p {
+    color: var(--ink-muted);
+    margin: 0;
+  }
+
+  /* ── Stage tabs ── */
+  .stage-tabs {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .stage-tab {
+    padding: 10px 22px;
+    border-radius: 999px;
+    border: 1px solid #3a548f;
+    background: #0e1a39;
+    color: var(--ink-muted);
+    font-weight: 600;
+    font-size: .95rem;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .stage-tab:hover { border-color: #57e6ff; color: #57e6ff; }
+  .stage-tab.active {
+    background: linear-gradient(135deg, #57e6ff22, #8f7bff22);
+    border-color: #57e6ff;
+    color: #57e6ff;
+  }
+
+  /* ── Stage panel ── */
+  .stage-panel { display: none; }
+  .stage-panel.active { display: block; }
+
+  /* ── Alphabet grid ── */
+  .alpha-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .alpha-btn {
+    aspect-ratio: 1;
+    border-radius: 14px;
+    border: 1px solid #3a548f;
+    background: #0e1a39;
+    color: var(--ink);
+    font-size: 1.4rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .18s;
+    display: grid;
+    place-items: center;
+  }
+  .alpha-btn:hover { border-color: #57e6ff; background: #132040; transform: translateY(-2px); }
+  .alpha-btn.playing {
+    border-color: #57e6ff;
+    background: linear-gradient(135deg, #0d3348, #132040);
+    color: #57e6ff;
+    box-shadow: 0 0 16px #57e6ff44;
+  }
+  .alpha-btn.done {
+    border-color: #67ffd4;
+    color: #67ffd4;
+    background: #0a2e22;
+  }
+
+  /* ── Word cards ── */
+  .word-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .word-card {
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid #3a548f;
+    background: #0e1a39;
+    cursor: pointer;
+    transition: all .18s;
+    text-align: center;
+  }
+  .word-card .wc-label {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .word-card .wc-sub {
+    font-size: .78rem;
+    color: var(--ink-muted);
+  }
+  .word-card:hover { border-color: #8f7bff; transform: translateY(-2px); }
+  .word-card.playing {
+    border-color: #8f7bff;
+    background: linear-gradient(135deg, #1a1050, #130f3a);
+    box-shadow: 0 0 18px #8f7bff44;
+  }
+  .word-card.done { border-color: #67ffd4; background: #0a2e22; }
+
+  /* ── Playback area ── */
+  .learn-playback {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  @media (max-width: 700px) { .learn-playback { grid-template-columns: 1fr; } }
+
+  .now-playing {
+    padding: 16px;
+    border-radius: 14px;
+    border: 1px solid #2e447c;
+    background: #0a1224;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .now-playing .np-label {
+    font-size: .8rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+  }
+  .now-playing .np-word {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #57e6ff;
+    letter-spacing: .05em;
+  }
+  .now-playing .np-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .now-playing .np-token {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #3a548f;
+    font-size: .85rem;
+    color: var(--ink-muted);
+    background: #101c3a;
+  }
+  .now-playing .np-token.active {
+    border-color: #57e6ff;
+    color: #57e6ff;
+    background: #0d3348;
+  }
+
+  /* ── Speed control ── */
+  .speed-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .speed-row label { font-size: .85rem; color: var(--ink-muted); font-weight: 600; }
+  .speed-btn {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid #3a548f;
+    background: #0e1a39;
+    color: var(--ink-muted);
+    font-size: .85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .speed-btn:hover { border-color: #57e6ff; color: #57e6ff; }
+  .speed-btn.active { border-color: #57e6ff; color: #57e6ff; background: #0d3348; }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    height: 4px;
+    background: #1a2a50;
+    border-radius: 999px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #57e6ff, #8f7bff);
+    border-radius: 999px;
+    transition: width .3s ease;
+    width: 0%;
+  }
+
+  /* ── Controls ── */
+  .learn-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .ctrl-btn {
+    padding: 10px 20px;
+    border-radius: 12px;
+    border: 0;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .18s;
+    font-size: .95rem;
+  }
+  .ctrl-btn:hover { transform: translateY(-1px); opacity: .9; }
+  .ctrl-primary { background: linear-gradient(135deg, #57e6ff, #67ffd4); color: #06132f; }
+  .ctrl-secondary { background: #152a59; color: #dce6ff; border: 1px solid #3a548f; }
+</style>
+
+<div class="learn-header">
+  <h2>🤟 Learning Mode</h2>
+  <p>Master sign language step by step — alphabets, then words, then phrases.</p>
+</div>
+
+<!-- Stage tabs -->
+<div class="stage-tabs">
+  <button class="stage-tab active" onclick="switchStage('alpha', this)">📖 Stage 1 — A to Z</button>
+  <button class="stage-tab" onclick="switchStage('words2', this)">✌️ Stage 2 — 2-Word Signs</button>
+  <button class="stage-tab" onclick="switchStage('words3', this)">🤝 Stage 3 — 3-Word Signs</button>
+</div>
+
+<!-- Progress -->
+<div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+
+<!-- Speed control (global) -->
+<div class="speed-row">
+  <label>⚡ Speed:</label>
+  <button class="speed-btn active" onclick="setSpeed(0.5, this)">0.5×</button>
+  <button class="speed-btn" onclick="setSpeed(1, this)">1×</button>
+  <button class="speed-btn" onclick="setSpeed(1.5, this)">1.5×</button>
+  <button class="speed-btn" onclick="setSpeed(2, this)">2×</button>
+</div>
+
+<!-- ══ STAGE 1: Alphabet ══ -->
+<div class="stage-panel active" id="stage-alpha">
+  <div class="learn-playback">
+    <div>
+      <p class="muted" style="margin-bottom:12px;">Click any letter to watch its sign animation.</p>
+      <div class="alpha-grid" id="alphaGrid">
+        {% for letter in alphabet %}
+        <button class="alpha-btn" onclick="playAlpha('{{ letter }}')" id="alpha-{{ letter }}">
+          {{ letter|upper }}
+        </button>
+        {% endfor %}
+      </div>
+      <div class="learn-controls">
+        <button class="ctrl-btn ctrl-primary" onclick="playAllAlpha()">▶ Play A → Z</button>
+        <button class="ctrl-btn ctrl-secondary" onclick="resetAlpha()">↺ Reset</button>
+      </div>
+    </div>
+    <div>
+      <div class="now-playing" id="alphaNowPlaying">
+        <span class="np-label">Now Playing</span>
+        <span class="np-word" id="alphaCurrentLetter">—</span>
+      </div>
+      <div class="video-wrap" style="margin-top:12px;">
+        <video id="alphaVideo" preload="auto">
+          <source src="" type="video/mp4">
+        </video>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ STAGE 2: 2-Word Signs ══ -->
+<div class="stage-panel" id="stage-words2">
+  <p class="muted" style="margin-bottom:16px;">Learn common 2-word sign combinations. Click a card to play.</p>
+  <div class="word-grid" id="grid2">
+    {% for item in two_word_sets %}
+    <div class="word-card" onclick="playWordSet({{ forloop.counter0 }}, 2)" id="wcard2-{{ forloop.counter0 }}">
+      <div class="wc-label">{{ item.display }}</div>
+      <div class="wc-sub">{{ item.words|join:" + " }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="learn-controls">
+    <button class="ctrl-btn ctrl-primary" onclick="playAllSets(2)">▶ Play All</button>
+    <button class="ctrl-btn ctrl-secondary" onclick="resetSets(2)">↺ Reset</button>
+  </div>
+  <div class="now-playing" id="nowPlaying2" style="margin-top:16px;">
+    <span class="np-label">Now Playing</span>
+    <span class="np-word" id="npWord2">—</span>
+    <div class="np-tokens" id="npTokens2"></div>
+  </div>
+  <div class="video-wrap" style="margin-top:12px;">
+    <video id="video2" preload="auto"><source src="" type="video/mp4"></video>
+  </div>
+</div>
+
+<!-- ══ STAGE 3: 3-Word Signs ══ -->
+<div class="stage-panel" id="stage-words3">
+  <p class="muted" style="margin-bottom:16px;">Practice 3-word sign phrases. Click a card to play.</p>
+  <div class="word-grid" id="grid3">
+    {% for item in three_word_sets %}
+    <div class="word-card" onclick="playWordSet({{ forloop.counter0 }}, 3)" id="wcard3-{{ forloop.counter0 }}">
+      <div class="wc-label">{{ item.display }}</div>
+      <div class="wc-sub">{{ item.words|join:" + " }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="learn-controls">
+    <button class="ctrl-btn ctrl-primary" onclick="playAllSets(3)">▶ Play All</button>
+    <button class="ctrl-btn ctrl-secondary" onclick="resetSets(3)">↺ Reset</button>
+  </div>
+  <div class="now-playing" id="nowPlaying3" style="margin-top:16px;">
+    <span class="np-label">Now Playing</span>
+    <span class="np-word" id="npWord3">—</span>
+    <div class="np-tokens" id="npTokens3"></div>
+  </div>
+  <div class="video-wrap" style="margin-top:12px;">
+    <video id="video3" preload="auto"><source src="" type="video/mp4"></video>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let currentSpeed = 0.5;
+let alphaQueue   = [];
+let alphaIdx     = 0;
+let alphaPlaying = false;
+
+const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'.split('');
+
+// Data from Django context (injected as JS arrays)
+const TWO_WORD_SETS   = {{ two_word_sets_json|safe }};
+const THREE_WORD_SETS = {{ three_word_sets_json|safe }};
+
+// ── Speed control ──────────────────────────────────────────────────────────
+function setSpeed(val, btn) {
+  currentSpeed = val;
+  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Apply to all videos immediately
+  ['alphaVideo','video2','video3'].forEach(id => {
+    const v = document.getElementById(id);
+    if (v) v.playbackRate = currentSpeed;
+  });
+}
+
+// ── Stage switching ────────────────────────────────────────────────────────
+function switchStage(name, btn) {
+  document.querySelectorAll('.stage-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.stage-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('stage-' + name).classList.add('active');
+  btn.classList.add('active');
+  updateProgress(0);
+}
+
+function updateProgress(pct) {
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+// ── Alpha helpers ──────────────────────────────────────────────────────────
+function playAlpha(letter) {
+  const vid = document.getElementById('alphaVideo');
+  document.getElementById('alphaCurrentLetter').textContent = letter.toUpperCase();
+
+  // Mark all done except current
+  document.querySelectorAll('.alpha-btn').forEach(b => b.classList.remove('playing'));
+  const btn = document.getElementById('alpha-' + letter);
+  if (btn) btn.classList.add('playing');
+
+  vid.src = '/static/' + letter + '.mp4';
+  vid.playbackRate = currentSpeed;
+  vid.load();
+  vid.play().catch(() => {});
+  vid.onended = () => {
+    if (btn) { btn.classList.remove('playing'); btn.classList.add('done'); }
+  };
+}
+
+function playAllAlpha() {
+  alphaQueue   = [...ALPHABET];
+  alphaIdx     = 0;
+  alphaPlaying = true;
+  document.querySelectorAll('.alpha-btn').forEach(b => {
+    b.classList.remove('done', 'playing');
+  });
+  playNextAlpha();
+}
+
+function playNextAlpha() {
+  if (alphaIdx >= alphaQueue.length) {
+    alphaPlaying = false;
+    updateProgress(100);
+    return;
+  }
+  const letter = alphaQueue[alphaIdx];
+  updateProgress(Math.round((alphaIdx / alphaQueue.length) * 100));
+  playAlpha(letter);
+
+  const vid = document.getElementById('alphaVideo');
+  vid.onended = () => {
+    const btn = document.getElementById('alpha-' + letter);
+    if (btn) { btn.classList.remove('playing'); btn.classList.add('done'); }
+    alphaIdx++;
+    playNextAlpha();
+  };
+}
+
+function resetAlpha() {
+  document.querySelectorAll('.alpha-btn').forEach(b => {
+    b.classList.remove('done', 'playing');
+  });
+  alphaPlaying = false;
+  alphaIdx = 0;
+  document.getElementById('alphaCurrentLetter').textContent = '—';
+  document.getElementById('alphaVideo').pause();
+  updateProgress(0);
+}
+
+// ── Word set helpers ───────────────────────────────────────────────────────
+let setQueues = { 2: [], 3: [] };
+let setIdxs   = { 2: 0, 3: 0 };
+
+function playWordSet(idx, stage) {
+  const data   = stage === 2 ? TWO_WORD_SETS : THREE_WORD_SETS;
+  const item   = data[idx];
+  const tokens = item.words;  // array of words/letters
+  const vid    = document.getElementById('video' + stage);
+  const npWord = document.getElementById('npWord' + stage);
+  const npToks = document.getElementById('npTokens' + stage);
+
+  // Mark card
+  document.querySelectorAll(`[id^="wcard${stage}-"]`).forEach(c => c.classList.remove('playing'));
+  const card = document.getElementById('wcard' + stage + '-' + idx);
+  if (card) card.classList.add('playing');
+
+  npWord.textContent = item.display;
+
+  // Render token chips
+  npToks.innerHTML = tokens.map((t, i) =>
+    `<span class="np-token" id="tok${stage}-${i}">${t}</span>`
+  ).join('');
+
+  let ti = 0;
+
+  function playToken(num) {
+    document.querySelectorAll(`[id^="tok${stage}-"]`).forEach(t => t.classList.remove('active'));
+    const chip = document.getElementById('tok' + stage + '-' + num);
+    if (chip) chip.classList.add('active');
+
+    vid.src = '/static/' + tokens[num] + '.mp4';
+    vid.playbackRate = currentSpeed;
+    vid.load();
+    vid.play().catch(() => {});
+
+    vid.onended = () => {
+      ti++;
+      if (ti < tokens.length) {
+        playToken(ti);
+      } else {
+        if (card) { card.classList.remove('playing'); card.classList.add('done'); }
+        document.querySelectorAll(`[id^="tok${stage}-"]`).forEach(t => t.classList.remove('active'));
+        // Auto-advance if playing all
+        if (setIdxs[stage] !== null) {
+          setIdxs[stage]++;
+          playNextSet(stage);
+        }
+      }
+    };
+  }
+
+  setIdxs[stage] = null;  // manual play — disable auto-advance
+  playToken(0);
+}
+
+function playAllSets(stage) {
+  const data = stage === 2 ? TWO_WORD_SETS : THREE_WORD_SETS;
+  document.querySelectorAll(`[id^="wcard${stage}-"]`).forEach(c => {
+    c.classList.remove('done', 'playing');
+  });
+  setIdxs[stage] = 0;
+  playNextSet(stage);
+}
+
+function playNextSet(stage) {
+  const data = stage === 2 ? TWO_WORD_SETS : THREE_WORD_SETS;
+  if (setIdxs[stage] >= data.length) {
+    updateProgress(100);
+    setIdxs[stage] = null;
+    return;
+  }
+  updateProgress(Math.round((setIdxs[stage] / data.length) * 100));
+  const savedIdx = setIdxs[stage];
+  // Temporarily allow auto-advance
+  const item   = data[savedIdx];
+  const tokens = item.words;
+  const vid    = document.getElementById('video' + stage);
+  const npWord = document.getElementById('npWord' + stage);
+  const npToks = document.getElementById('npTokens' + stage);
+
+  document.querySelectorAll(`[id^="wcard${stage}-"]`).forEach(c => c.classList.remove('playing'));
+  const card = document.getElementById('wcard' + stage + '-' + savedIdx);
+  if (card) card.classList.add('playing');
+  npWord.textContent = item.display;
+  npToks.innerHTML = tokens.map((t, i) =>
+    `<span class="np-token" id="tok${stage}-${i}">${t}</span>`
+  ).join('');
+
+  let ti = 0;
+  function playToken(num) {
+    document.querySelectorAll(`[id^="tok${stage}-"]`).forEach(t => t.classList.remove('active'));
+    const chip = document.getElementById('tok' + stage + '-' + num);
+    if (chip) chip.classList.add('active');
+    vid.src = '/static/' + tokens[num] + '.mp4';
+    vid.playbackRate = currentSpeed;
+    vid.load();
+    vid.play().catch(() => {});
+    vid.onended = () => {
+      ti++;
+      if (ti < tokens.length) {
+        playToken(ti);
+      } else {
+        if (card) { card.classList.remove('playing'); card.classList.add('done'); }
+        setIdxs[stage]++;
+        playNextSet(stage);
+      }
+    };
+  }
+  playToken(0);
+}
+
+function resetSets(stage) {
+  document.querySelectorAll(`[id^="wcard${stage}-"]`).forEach(c => {
+    c.classList.remove('done', 'playing');
+  });
+  setIdxs[stage] = null;
+  document.getElementById('npWord' + stage).textContent = '—';
+  document.getElementById('npTokens' + stage).innerHTML = '';
+  document.getElementById('video' + stage).pause();
+  updateProgress(0);
+}
+</script>
+{% endblock %}

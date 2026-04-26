@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;">
+
+  <!-- ── Input card ── -->
+  <article class="card">
+    <h2 class="headline" style="font-size:1.45rem;">Input Console</h2>
+    <p class="muted" style="margin-bottom:14px;">
+      Type or speak in <strong style="color:#57e6ff;">any language</strong> — auto-translated to English.
+    </p>
+
+    <form action="" method="post" class="form-stack">
+      {% csrf_token %}
+      <div class="input-row">
+        <input type="text" name="sen" id="speechToText" class="mytext"
+               placeholder="Type in any language…" />
+        <button type="button" class="mic" id="micButton"
+                aria-label="Record speech" title="Start voice input"
+                onclick="startConverting()">
+          <img src="{% static 'mic3.png' %}" alt="Microphone" />
+        </button>
+      </div>
+      <input type="submit" name="submit" class="submit" value="Generate Signs" style="max-width:220px;" />
+    </form>
+
+    <div style="margin-top:18px;">
+      {% if trans_error %}
+      <p style="color:#ffaa55;font-size:.85rem;margin:0 0 10px;padding:8px 12px;
+                background:#1a1000;border:1px solid #ffaa55;border-radius:10px;">
+        {{ trans_error }}
+      </p>
+      {% endif %}
+
+      {% if text %}
+        <p class="muted"><strong style="color:#dbe5ff;">Input:</strong> {{ text }}</p>
+        {% if detected_lang and detected_lang != 'en' %}
+        <p class="muted" style="margin-top:4px;font-size:.85rem;">
+          🌐 Detected: <strong style="color:#57e6ff;">{{ detected_lang }}</strong>
+        </p>
+        {% endif %}
+        {% if english_text and english_text != text %}
+        <p class="muted" style="margin-top:4px;">
+          <strong style="color:#dbe5ff;">Translated:</strong> {{ english_text }}
+        </p>
+        {% endif %}
+      {% else %}
+        <p class="muted">No input yet.</p>
+      {% endif %}
+
+      <p class="muted" id="transcriptionStatus" style="margin:10px 0 0;">Mic idle.</p>
+
+      <p class="muted" style="margin:12px 0 8px;">
+        <strong style="color:#dbe5ff;">Detected Tokens:</strong>
+      </p>
+      <ul class="chips" id="list">
+        {% for word in words %}
+        <li>{{ word }}</li>
+        {% empty %}
+        <li>No tokenized words yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </article>
+
+  <!-- ── Playback card ── -->
+  <article class="card">
+    <h2 class="headline" style="font-size:1.45rem;">Playback Deck</h2>
+    <p class="muted" style="margin-bottom:12px;">Animate each token in sequence.</p>
+
+    <!-- Speed control -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <span style="font-size:.85rem;color:var(--ink-muted);font-weight:600;">⚡ Speed:</span>
+      <button class="speed-btn" onclick="setSpeed(0.5,this)">0.5×</button>
+      <button class="speed-btn active" onclick="setSpeed(1,this)">1×</button>
+      <button class="speed-btn" onclick="setSpeed(1.5,this)">1.5×</button>
+      <button class="speed-btn" onclick="setSpeed(2,this)">2×</button>
+    </div>
+
+    <button class="submit" onclick="playPause()" style="margin-bottom:14px;">▶ Play / Pause Sequence</button>
+
+    <div class="video-wrap">
+      <video id="videoPlayer" preload="auto" autoplay>
+        <source src="" type="video/mp4">
+        Your browser does not support HTML5 video.
+      </video>
+    </div>
+  </article>
+
+</section>
+
+<style>
+.speed-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #3a548f;
+  background: #0e1a39;
+  color: var(--ink-muted);
+  font-size: .85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+}
+.speed-btn:hover { border-color: #57e6ff; color: #57e6ff; }
+.speed-btn.active { border-color: #57e6ff; color: #57e6ff; background: #0d3348; }
+</style>
+
+<script>
+  let currentSpeed = 1;
+
+  function setSpeed(val, btn) {
+    currentSpeed = val;
+    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const player = document.getElementById('videoPlayer');
+    player.playbackRate = currentSpeed;
+  }
+
+  function startConverting() {
+    const statusNode = document.getElementById('transcriptionStatus');
+    const output     = document.getElementById('speechToText');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { statusNode.textContent = 'Speech recognition not supported.'; return; }
+
+    const recognition          = new SR();
+    recognition.lang           = 'en-US';
+    recognition.continuous     = false;
+    recognition.interimResults = true;
+    statusNode.textContent     = 'Listening… speak now.';
+
+    recognition.onresult = function(event) {
+      let t = '';
+      for (let i = event.resultIndex; i < event.results.length; i++)
+        t += event.results[i][0].transcript;
+      output.value = t.trim();
+    };
+    recognition.onerror = function(e) {
+      statusNode.textContent = `Mic error: ${e.error}. Check permissions.`;
+    };
+    recognition.onend = function() {
+      statusNode.textContent = output.value ? 'Voice captured. Tap Generate Signs.' : 'No speech detected.';
+    };
+    recognition.start();
+  }
+
+  function play() {
+    const listItems = document.getElementById('list').getElementsByTagName('li');
+    if (!listItems.length || listItems[0].textContent === 'No tokenized words yet.') return;
+
+    const sources = Array.from(listItems).map(li => '/static/' + li.textContent.trim() + '.mp4');
+    let i = 0;
+
+    function videoPlay(num) {
+      listItems[num].classList.add('active');
+      const player = document.getElementById('videoPlayer');
+      player.setAttribute('src', sources[num]);
+      player.load();
+      player.playbackRate = currentSpeed;
+      player.play();
+      // Re-apply speed after load (some browsers reset it)
+      player.onloadeddata = () => { player.playbackRate = currentSpeed; };
+    }
+
+    document.getElementById('videoPlayer').onended = function() {
+      listItems[i].classList.remove('active');
+      i++;
+      if (i < sources.length) videoPlay(i);
+      else document.getElementById('videoPlayer').pause();
+    };
+
+    videoPlay(0);
+  }
+
+  function playPause() {
+    const player = document.getElementById('videoPlayer');
+    if (player.paused) play(); else player.pause();
+  }
+</script>
+{% endblock %}
